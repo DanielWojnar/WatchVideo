@@ -1,0 +1,95 @@
+﻿@page "/video/{Id:int}"
+
+@using WatchVideo.Models;
+@using WatchVideo.Services;
+
+@inject NavigationManager NavigationManager
+@inject IVideoService _video
+@inject IDemoService _demo
+
+<div class="sticky-top p-2 d-flex bg-dark shadow">
+    <button class="btn btn-dark" @onclick="Return">
+        &larr;
+    </button>
+    <div class="text-muted d-flex justify-content-end align-items-center col">
+        <small>
+            WatchVideo &reg; 2022 @(AppState.DemoModeOn ? "- Demo Mode" : "")
+        </small>
+    </div>
+</div>
+@if (video != null)
+{
+    <div class="h-50 d-flex">
+        <div class="col">
+            <video class="h-100 w-100 bg-black border border-light" controls>
+                <source src="@video.VideoSrc" type="video/mp4">
+            </video>
+        </div>
+    </div>
+    <div class="d-flex flex-column mt-3 px-2 pb-4">
+        <h3 class="d-block">
+            @video.Title
+        </h3>
+        <div class="d-flex">
+             <img class="img-fluid shadow img-thumbnail" style="object-fit: cover; max-height:271px;" alt="plakat @video.Title" src="@video.VideoThumbnail"/>
+            <div>
+                 &nbsp;
+            </div>
+            <div class="d-flex flex-column col-6">
+                <small class="d-block text-muted">
+                    Opis
+                </small>
+                <small class="d-block pb-2">
+                    @(string.IsNullOrEmpty(video.Description) ? "Brak" : video.Description)
+                </small>
+                <small class="d-block text-muted">
+                    Data przesłania
+                </small>
+                <small class="d-block pb-2">
+                    @video.UploadDate.ToString("g")
+                </small>
+            </div>
+        </div>
+    </div>
+}
+else if(errorLoading)
+{
+    <h1> Wystąpił problem podczas ładowania filmu, wróc do ekranu głównego </h1>
+}
+else
+{
+    <div class="col d-flex justify-content-center align-items-center">
+        <div class="spinner-border text-info" role="status">
+            <span class="sr-only"></span>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+    private Video video;
+    private bool errorLoading;
+
+    protected override void OnInitialized()
+    {
+        if (AppState.DemoModeOn)
+        {
+            _video = _demo;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        video = await _video.GetVideoAsync(Id);
+        if(video == null)
+        {
+            errorLoading = true;
+        }
+    }
+
+    private void Return()
+    {
+        NavigationManager.NavigateTo(AppState.ReturnUrl);
+    }
+}

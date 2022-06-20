@@ -1,0 +1,202 @@
+﻿@page "/{Page:int?}"
+
+@using WatchVideo.Models;
+@using WatchVideo.Services;
+
+@inject NavigationManager NavigationManager
+@inject IVideoService _video
+@inject IDemoService _demo
+@inject IJSRuntime JsRuntime
+
+<div class="sticky-top p-2 d-flex flex-column bg-dark shadow">
+    <div class="text-muted d-flex justify-content-end align-items-center">
+        <small>
+            WatchVideo &reg; 2022 @(AppState.DemoModeOn ? "- Demo Mode" : "")
+        </small>
+    </div>
+    <EditForm EditContext="@editContext" OnValidSubmit="@HandleSubmit" class="d-flex flex-row">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <InputText id="search" class="col bg-dark text-white border border-light" type="search" placeholder="Szukaj..." @bind-Value="@searchBox.Search" />
+
+        <button class="btn btn-dark border border-light" type="submit">Szukaj</button>
+    </EditForm>
+</div>
+@if(videoPage != null)
+{
+    <div class="py-2">
+        <div id="videoContainer" class="d-flex py-2 flex-wrap">
+            @foreach(Video vid in videoPage.videos)
+            {
+                <div class="col-6 d-flex px-2">
+                    <div class="card text-white bg-dark mb-4 col-12 shadow" @onclick="(() => NavigateToVideo(vid.Id))">
+                        <img class="card-img-top img-thumbnail border-dark max-height-33vh" src="@vid.VideoThumbnail" alt="plakat @vid.Title">
+                        <div class="card-body">
+                            <h5 class="card-title font-size-small">@vid.Title</h5>
+                            <p class="card-text elipsis-2 font-size-smaller pb-0 mb-0 ">@vid.Description</p>
+                            <p class="card-text pt-0 mt-0"><small class="text-muted font-size-smaller">@vid.UploadDate.ToString("g")</small></p>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+    <div class="self-align-end col d-flex justify-content-around align-items-end pb-3">
+
+        @if(Page != 0)
+        {
+            <button class="btn btn-dark" @onclick="async() => await PrevPage()">
+                &larr;
+            </button>
+        }
+        else
+        {
+            <div></div>
+        }
+        <span>
+            @(Page+1)
+        </span>
+        @if(videoPage.NextPage)
+        {
+            <button class="btn btn-dark" @onclick="async() => await NextPage()">
+                &rarr;
+            </button>
+        }
+        else
+        {
+            <div></div>
+        }
+    </div>
+}
+else
+{
+    <div class="col d-flex justify-content-center align-items-center">
+        <div class="spinner-border text-info" role="status">
+            <span class="sr-only"></span>
+        </div>
+    </div>
+}
+<div class="modal text-black @ModalClass" tabindex="-1" role="dialog" style="display:@ModalDisplay">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Błąd servera</h5>
+            </div>
+            <div class="modal-body">
+                <p>Nie udało się nawiązać połączenia z serverem czy wczytać wersje demostracyjna z pamieci urządzenia?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-dismiss="modal" @onclick="async() => await LoadDemo()">Demo</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" @onclick="async() => await Reconnect()">Spróbuj ponownie</button>
+            </div>
+        </div>
+    </div>
+</div>
+@if (ShowBackdrop)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code{
+    [Parameter]
+    public int Page { get; set; }
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? Search { get; set; }
+    public string ModalDisplay = "none;";
+    public string ModalClass = "";
+    public bool ShowBackdrop = false;
+    private SearchBox searchBox = new SearchBox();
+    private EditContext? editContext;
+    private VideoPage videoPage;
+
+    protected override void OnInitialized()
+    {
+        editContext = new EditContext(searchBox);
+        if (AppState.DemoModeOn)
+        {
+            _video = _demo;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if(Search != null)
+        {
+            searchBox.Search = Search;
+        }
+        await LoadVideos();
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (editContext != null && editContext.Validate())
+        {
+            Page = 0;
+            Search = searchBox.Search;
+            await LoadVideos();
+        }
+    }
+
+    private void NavigateToVideo(int videoId)
+    {
+        AppState.ReturnUrl = "/" + Page + "?search=" + Search;
+        NavigationManager.NavigateTo("/video/" + videoId);
+    }
+
+    private async Task LoadDemo()
+    {
+        CloseModal();
+        AppState.DemoModeOn = true;
+        _video = _demo;
+        await LoadVideos();
+    }
+
+    private async Task Reconnect()
+    {
+        CloseModal();
+        await LoadVideos();
+    }
+
+    private async Task LoadVideos()
+    {
+        videoPage = await _video.GetVideosAsync(Page, Search);
+        if(videoPage == null)
+        {
+            OpenModal();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        videoPage = null;
+        Page = Page + 1;
+        await JsRuntime.InvokeVoidAsync("ResetScroll");
+        await LoadVideos();
+    }
+
+    private async Task PrevPage()
+    {
+        videoPage = null;
+        Page = Page - 1;
+        await JsRuntime.InvokeVoidAsync("ResetScroll");
+        await LoadVideos();
+    }
+
+    private void OpenModal()
+    {
+        ModalDisplay = "block;";
+        ModalClass = "Show";
+        ShowBackdrop = true;
+        StateHasChanged();
+    }
+
+    private void CloseModal()
+    {
+        ModalDisplay = "none";
+        ModalClass = "";
+        ShowBackdrop = false;
+        StateHasChanged();
+    }
+}
